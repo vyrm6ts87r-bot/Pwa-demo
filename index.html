@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a1a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>STRAND Admin</title>
+<style>
+  /* ===== STRAND Admin — editorial-minimal, matches storefront palette ===== */
+  :root{
+    --bg:#f5f3ee; --surface:#fffdf8; --ink:#1a1a1a; --ink-muted:#6b6862;
+    --line:#e3ded4; --accent:#2f5d8a; --ok:#2f7d4f; --warn:#b8702a; --bad:#a23a2f;
+    --mono:'SF Mono',ui-monospace,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#16150f; --surface:#1f1d16; --ink:#f0ece2; --ink-muted:#9a958a;
+      --line:#332f25; --accent:#7aa7d4; }
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--sans);background:var(--bg);color:var(--ink);
+    -webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
+  a{color:var(--accent)}
+  .wrap{max-width:760px;margin:0 auto;padding:16px 14px 90px}
+  h1{font-size:22px;letter-spacing:-0.02em}
+  h2{font-size:16px;margin-bottom:10px}
+  .muted{color:var(--ink-muted)}
+  .mono{font-family:var(--mono)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;
+    font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  .pill.pending{background:#e8e4d8;color:#6b6862}
+  .pill.detected{background:#dfeaf5;color:#2f5d8a}
+  .pill.confirmed{background:#d9efe0;color:#2f7d4f}
+  .pill.shipped{background:#d3e4d3;color:#2f7d4f}
+  .pill.underpaid{background:#f5e2cf;color:#b8702a}
+  .pill.expired{background:#eede2;color:#a23a2f;background:#f3dede}
+  .pill.flag{background:#f3dede;color:#a23a2f;margin-left:6px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:14px;margin-bottom:12px}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .btn{font:inherit;font-size:14px;padding:10px 14px;border-radius:9px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);cursor:pointer}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.sm{padding:6px 10px;font-size:13px}
+  .btn:disabled{opacity:.5}
+  input,select{font:inherit;font-size:15px;padding:10px;border:1px solid var(--line);
+    border-radius:8px;background:var(--bg);color:var(--ink);width:100%}
+  label{font-size:13px;color:var(--ink-muted);display:block;margin:8px 0 4px}
+  /* tab bar */
+  .tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);
+    border-top:1px solid var(--line);display:flex;justify-content:space-around;
+    padding:8px 4px calc(8px + env(safe-area-inset-bottom))}
+  .tab{flex:1;text-align:center;font-size:10px;color:var(--ink-muted);
+    background:none;border:none;padding:4px;cursor:pointer;font-family:var(--sans)}
+  .tab.active{color:var(--accent);font-weight:600}
+  .tab svg{display:block;margin:0 auto 2px;width:20px;height:20px}
+  /* order lanes */
+  .lane-title{font-size:12px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--ink-muted);margin:14px 0 6px}
+  .order-line{padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+  .order-line:last-child{border-bottom:none}
+  .stat{font-size:26px;font-weight:600;letter-spacing:-0.01em}
+  .stat-sub{font-size:12px;color:var(--ink-muted)}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .gauge{height:8px;background:var(--line);border-radius:999px;overflow:hidden;margin-top:6px}
+  .gauge>span{display:block;height:100%;background:var(--ok)}
+  .hidden{display:none}
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;
+    font-size:14px;opacity:0;transition:opacity .2s;z-index:50}
+  .toast.show{opacity:1}
+  .back{background:none;border:none;color:var(--accent);font-size:14px;cursor:pointer;padding:0;margin-bottom:8px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+  .field-row{display:flex;gap:8px}
+  .field-row>div{flex:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ====== LOGIN ====== -->
+  <div id="login">
+    <h1 style="margin-bottom:16px">STRAND</h1>
+    <div class="card">
+      <label for="u">Username</label>
+      <input id="u" autocomplete="username">
+      <label for="p">Password</label>
+      <input id="p" type="password" autocomplete="current-password">
+      <button class="btn primary" style="margin-top:14px;width:100%" onclick="login()">Sign in</button>
+      <p class="muted" style="font-size:12px;margin-top:10px">You must be connected to the VPN to reach this dashboard.</p>
+    </div>
+  </div>
+
+  <!-- ====== APP (hidden until login) ====== -->
+  <div id="app" class="hidden">
+
+    <div class="row" style="margin-bottom:6px">
+      <h1 id="screen-title">Orders</h1>
+      <button class="btn sm" onclick="enablePush()" id="pushBtn">Enable alerts</button>
+    </div>
+    <div id="conn" class="muted mono" style="font-size:11px;margin-bottom:10px">connecting…</div>
+
+    <!-- ORDERS -->
+    <section id="s-orders"></section>
+
+    <!-- ORDER DETAIL -->
+    <section id="s-detail" class="hidden"></section>
+
+    <!-- SALES + BALANCES -->
+    <section id="s-money" class="hidden"></section>
+
+    <!-- LEDGER -->
+    <section id="s-ledger" class="hidden"></section>
+
+    <!-- HEALTH / ANALYTICS -->
+    <section id="s-system" class="hidden"></section>
+
+    <!-- EMPLOYEES -->
+    <section id="s-team" class="hidden"></section>
+
+  </div>
+</div>
+
+<!-- ===== Tab bar ===== -->
+<nav class="tabs hidden" id="tabs">
+  <button class="tab active" data-screen="orders" onclick="show('orders')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>Orders</button>
+  <button class="tab" data-screen="money" onclick="show('money')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Money</button>
+  <button class="tab" data-screen="ledger" onclick="show('ledger')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Refunds</button>
+  <button class="tab" data-screen="system" onclick="show('system')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 6v6l4 2"/></svg>System</button>
+  <button class="tab" data-screen="team" onclick="show('team')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M16 8a3 3 0 0 1 0 6"/></svg>Team</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   STRAND Admin — app logic
+   ONE constant to set at deploy: BACKEND.
+   ============================================================ */
+
+// ====== EDIT THIS ONE LINE AT DEPLOY ======
+const BACKEND = 'https://api.STRAND_DOMAIN';
+// ==========================================
+
+let TOKEN = sessionStorage.getItem('strand-admin-token') || null;
+let evtSource = null;
+
+// ---- helpers ----
+function $(id){return document.getElementById(id)}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+// ====== DEMO MODE — mock data layer (not connected to anything) ======
+// This is a visual prototype. All data below is fake sample data so you
+// can see every screen populated. The real version fetches from the backend.
+const DEMO = true;
+const SAMPLE = {
+  orders: [
+    {order_ref:'STRAND-1043',state:'confirmed',overpaid:0,underpaid_accepted:0,rail:'btcpay',pay_currency:'BTC',
+     amount_usd:268,amount_gbp_snapshot:211.40,invoiced_usd:268,crypto_amount:'0.00284100',
+     tx_hash:'a3f9c1e8b27d4f60a1c9e2d7b8f43a05c6e91d2f7b8a4c30e5f9d1b2a7c8e4f01',
+     shipping_method:'special_delivery',tracking_number:null,shipped_by:null,
+     ship_name:'J. Holloway',ship_address1:'14 Pembroke Mews',ship_address2:'',ship_city:'London',ship_region:'',
+     ship_postal:'W8 6NX',ship_country:'United Kingdom',customer_email:'jh@example.com',ship_phone:'07700 900812',
+     cart_json:'[{"name":"Research Pen — Compound A","quantity":2,"price":89},{"name":"Bacteriostatic Water 30ml","quantity":1,"price":18}]',
+     created_at:isoMin(22),confirmed_at:isoMin(14),detected_at:isoMin(20),shipped_at:null},
+    {order_ref:'STRAND-1042',state:'confirmed',overpaid:1,underpaid_accepted:0,rail:'payram',pay_currency:'USDC',
+     amount_usd:134,amount_gbp_snapshot:105.70,invoiced_usd:134,crypto_amount:'140.00',
+     tx_hash:'0x7a1f...c9e2',shipping_method:'tracked',tracking_number:null,shipped_by:null,
+     ship_name:'M. Okonkwo',ship_address1:'5 Calton Road',ship_address2:'Flat 2',ship_city:'Edinburgh',ship_region:'',
+     ship_postal:'EH8 8DP',ship_country:'United Kingdom',customer_email:'mo@example.com',ship_phone:'07700 900145',
+     cart_json:'[{"name":"Research Vial — Compound B","quantity":1,"price":134}]',
+     created_at:isoMin(48),confirmed_at:isoMin(40),detected_at:isoMin(46),shipped_at:null},
+    {order_ref:'STRAND-1041',state:'detected',overpaid:0,underpaid_accepted:0,rail:'acceptxmr',pay_currency:'XMR',
+     amount_usd:null,amount_gbp_snapshot:null,invoiced_usd:312,crypto_amount:'1.84200000',
+     tx_hash:null,shipping_method:'special_delivery',tracking_number:null,shipped_by:null,
+     ship_name:'A. Lindqvist',ship_address1:'22 Dawson Street',ship_address2:'',ship_city:'Dublin',ship_region:'',
+     ship_postal:'D02 X285',ship_country:'Ireland',customer_email:'al@example.com',ship_phone:'',
+     cart_json:'[{"name":"Research Pen — Compound A","quantity":1,"price":89},{"name":"Research Vial — Compound C","quantity":2,"price":111}]',
+     created_at:isoMin(8),confirmed_at:null,detected_at:isoMin(6),shipped_at:null},
+    {order_ref:'STRAND-1040',state:'underpaid',overpaid:0,underpaid_accepted:0,rail:'btcpay',pay_currency:'BTC',
+     amount_usd:null,amount_gbp_snapshot:null,invoiced_usd:178,invoiced_crypto:'0.00189000',crypto_amount:'0.00120000',
+     tx_hash:'b8c2...11 a',shipping_method:'tracked',tracking_number:null,shipped_by:null,
+     ship_name:'R. Castellano',ship_address1:'9 Mercer Street',ship_address2:'',ship_city:'Manchester',ship_region:'',
+     ship_postal:'M1 2NP',ship_country:'United Kingdom',customer_email:'rc@example.com',ship_phone:'07700 900677',
+     cart_json:'[{"name":"Research Vial — Compound B","quantity":1,"price":134},{"name":"Bacteriostatic Water 30ml","quantity":2,"price":18}]',
+     created_at:isoMin(95),confirmed_at:null,detected_at:isoMin(90),shipped_at:null},
+    {order_ref:'STRAND-1039',state:'pending',overpaid:0,underpaid_accepted:0,rail:'payram',pay_currency:null,
+     amount_usd:null,amount_gbp_snapshot:null,invoiced_usd:89,crypto_amount:null,
+     tx_hash:null,shipping_method:'tracked',tracking_number:null,shipped_by:null,
+     ship_name:'T. Bauer',ship_address1:'3 Hawthorn Lane',ship_address2:'',ship_city:'Bristol',ship_region:'',
+     ship_postal:'BS1 4ST',ship_country:'United Kingdom',customer_email:'tb@example.com',ship_phone:'07700 900303',
+     cart_json:'[{"name":"Research Pen — Compound A","quantity":1,"price":89}]',
+     created_at:isoMin(3),confirmed_at:null,detected_at:null,shipped_at:null},
+    {order_ref:'STRAND-1038',state:'shipped',overpaid:0,underpaid_accepted:1,rail:'btcpay',pay_currency:'BTC',
+     amount_usd:223,amount_gbp_snapshot:175.90,invoiced_usd:223,crypto_amount:'0.00236000',
+     tx_hash:'c1d4...88f',shipping_method:'special_delivery',tracking_number:'AB123456789GB',shipped_by:'employee_sam',
+     ship_name:'P. Nakamura',ship_address1:'47 Sefton Park Road',ship_address2:'',ship_city:'Liverpool',ship_region:'',
+     ship_postal:'L8 3SD',ship_country:'United Kingdom',customer_email:'pn@example.com',ship_phone:'07700 900998',
+     cart_json:'[{"name":"Research Vial — Compound C","quantity":2,"price":111}]',
+     created_at:isoMin(1440),confirmed_at:isoMin(1430),detected_at:isoMin(1438),shipped_at:isoMin(1200)},
+    {order_ref:'STRAND-1037',state:'shipped',overpaid:0,underpaid_accepted:0,rail:'payram',pay_currency:'USDT',
+     amount_usd:156,amount_gbp_snapshot:123.10,invoiced_usd:156,crypto_amount:'156.00',
+     tx_hash:'0x9b3a...d1f',shipping_method:'tracked',tracking_number:'AB987654321GB',shipped_by:'employee_sam',
+     ship_name:'L. Fontaine',ship_address1:'12 Rue Test',ship_address2:'',ship_city:'Cardiff',ship_region:'',
+     ship_postal:'CF10 1AA',ship_country:'United Kingdom',customer_email:'lf@example.com',ship_phone:'07700 900221',
+     cart_json:'[{"name":"Research Pen — Compound A","quantity":1,"price":89},{"name":"Bacteriostatic Water 30ml","quantity":1,"price":18},{"name":"Alcohol Prep Pads ×100","quantity":1,"price":12}]',
+     created_at:isoMin(2880),confirmed_at:isoMin(2870),detected_at:isoMin(2878),shipped_at:isoMin(2600)},
+    {order_ref:'STRAND-1036',state:'expired',overpaid:0,underpaid_accepted:0,rail:'acceptxmr',pay_currency:'XMR',
+     amount_usd:null,amount_gbp_snapshot:null,invoiced_usd:198,crypto_amount:null,
+     tx_hash:null,shipping_method:'tracked',tracking_number:null,shipped_by:null,
+     ship_name:'D. Abubakar',ship_address1:'8 Test Close',ship_address2:'',ship_city:'Leeds',ship_region:'',
+     ship_postal:'LS1 4DT',ship_country:'United Kingdom',customer_email:'da@example.com',ship_phone:'',
+     cart_json:'[{"name":"Research Vial — Compound B","quantity":1,"price":134}]',
+     created_at:isoMin(4320),confirmed_at:null,detected_at:null,shipped_at:null}
+  ],
+  sales: {
+    today:{usd:402,gbp:317.10,orders:2},
+    week:{usd:2884,gbp:2274.60,orders:14},
+    month:{usd:11260,gbp:8879.70,orders:58}
+  },
+  balances: {
+    total_usd: 4218.50, total_gbp_live: 3326.40,
+    wallets: [
+      {label:'Bitcoin (BTCPay)', balance:'0.03241 BTC', usd:2104.30, gbp_live:1659.40},
+      {label:'Lightning', balance:'0.00412 BTC', usd:267.50, gbp_live:210.90},
+      {label:'Monero (view-only)', balance:'6.214 XMR', usd:921.40, gbp_live:726.60},
+      {label:'USDC (Base)', balance:'612.00 USDC', usd:612.00, gbp_live:482.70},
+      {label:'USDT', balance:'313.30 USDT', usd:313.30, gbp_live:247.10}
+    ]
+  },
+  ledger: [
+    {id:1,order_ref:'STRAND-1042',delta_type:'overpaid',delta_crypto:'6.00',expected_crypto:'134.00',received_crypto:'140.00',refund_address:'',refund_tx_hash:'',status:'open'},
+    {id:2,order_ref:'STRAND-1038',delta_type:'underpaid_accepted',delta_crypto:'-0.00004',expected_crypto:'0.00240000',received_crypto:'0.00236000',refund_address:'',refund_tx_hash:'',status:'open'},
+    {id:3,order_ref:'STRAND-1021',delta_type:'overpaid',delta_crypto:'12.50',expected_crypto:'200.00',received_crypto:'212.50',refund_address:'4A7xMonero...example',refund_tx_hash:'9f2c...refunded',status:'refunded'}
+  ],
+  health: {
+    disk_free_percent: 64.0, disk_used_percent: 36.0, disk_alert_at_used_percent: 80,
+    node: {synced:true, blocks:892145, headers:892145},
+    services: {btcpay:true, payram:true, acceptxmr:true, backend:true, umami:true},
+    sse_clients: 1
+  },
+  employees: [
+    {id:2,username:'employee_sam',role:'fulfilment',active:1,created_at:isoMin(20000),last_login_at:isoMin(180)},
+    {id:3,username:'employee_jo',role:'fulfilment',active:1,created_at:isoMin(8000),last_login_at:isoMin(1500)},
+    {id:4,username:'employee_old',role:'fulfilment',active:0,created_at:isoMin(40000),last_login_at:isoMin(30000)}
+  ],
+  sessions: [
+    {username:'employee_sam',role:'fulfilment',login_at:isoMin(180),last_seen_at:isoMin(60),logout_at:isoMin(60),ended_reason:'logout'},
+    {username:'employee_sam',role:'fulfilment',login_at:isoMin(1300),last_seen_at:isoMin(1140),logout_at:null,ended_reason:null},
+    {username:'employee_jo',role:'fulfilment',login_at:isoMin(1500),last_seen_at:isoMin(1380),logout_at:isoMin(1380),ended_reason:'logout'},
+    {username:'employee_jo',role:'fulfilment',login_at:isoMin(3000),last_seen_at:isoMin(2850),logout_at:null,ended_reason:'inferred_idle'}
+  ]
+};
+function isoMin(minsAgo){ return new Date(Date.now()-minsAgo*60000).toISOString().slice(0,19).replace('T',' '); }
+function api(path, opts){
+  // return sample data based on path
+  let data = {};
+  if(path.indexOf('/orders')>-1) data = SAMPLE.orders;
+  else if(path.indexOf('/sales')>-1) data = SAMPLE.sales;
+  else if(path.indexOf('/balances')>-1) data = SAMPLE.balances;
+  else if(path.indexOf('/ledger/')>-1) { toast('Saved (demo — not sent anywhere)'); data = {ok:true}; }
+  else if(path.indexOf('/ledger')>-1) data = SAMPLE.ledger;
+  else if(path.indexOf('/health')>-1) data = SAMPLE.health;
+  else if(path.indexOf('/employees')>-1 && opts && opts.method==='POST') { toast('Added (demo)'); data={ok:true}; }
+  else if(path.indexOf('/active')>-1) { toast('Toggled (demo)'); data={ok:true}; }
+  else if(path.indexOf('/employees')>-1) data = SAMPLE.employees;
+  else if(path.indexOf('/sessions')>-1) data = SAMPLE.sessions;
+  else if(path.indexOf('/vapid')>-1) data = {};
+  return Promise.resolve({ ok:true, json:()=>Promise.resolve(data) });
+}
+// ====== END DEMO MOCK ======
+
+function fmtMoney(usd, gbp){
+  if(usd==null) return '—';
+  const u = '$'+Number(usd).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const g = gbp!=null ? ' · £'+Number(gbp).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+  return u+g;
+}
+function ago(ts){
+  if(!ts) return '';
+  const d = new Date(ts.replace(' ','T')+'Z'); const s=(Date.now()-d.getTime())/1000;
+  if(s<60) return Math.floor(s)+'s'; if(s<3600) return Math.floor(s/60)+'m';
+  if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d';
+}
+
+// ---- auth ----
+function login(){
+  const username=$('u').value.trim(), password=$('p').value;
+  fetch(BACKEND+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username,password})})
+    .then(r=>r.ok?r.json():Promise.reject(new Error('bad login')))
+    .then(d=>{
+      if(d.role!=='admin'){ toast('Admin access only'); return; }
+      TOKEN=d.token; sessionStorage.setItem('strand-admin-token',TOKEN);
+      boot();
+    }).catch(()=>toast('Invalid credentials'));
+}
+function logout(){
+  TOKEN=null; sessionStorage.removeItem('strand-admin-token');
+  if(evtSource) evtSource.close();
+  $('app').classList.add('hidden'); $('tabs').classList.add('hidden'); $('login').classList.remove('hidden');
+}
+
+// ---- boot ----
+function boot(){
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden'); $('tabs').classList.remove('hidden');
+  connectSSE();
+  show('orders');
+  // refresh on focus (catch-up after phone sleep)
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ connectSSE(); refreshCurrent(); }});
+}
+
+// ---- SSE live updates (disabled in demo) ----
+function connectSSE(){
+  if(DEMO){ $('conn').textContent='● live (demo)'; $('conn').style.color='var(--ok)'; return; }
+  if(evtSource) { try{evtSource.close()}catch(e){} }
+  evtSource = new EventSource(BACKEND+'/api/admin/stream?token='+encodeURIComponent(TOKEN));
+  evtSource.onopen = ()=>{ $('conn').textContent='● live'; $('conn').style.color='var(--ok)'; };
+  evtSource.onerror = ()=>{ $('conn').textContent='○ reconnecting…'; $('conn').style.color='var(--ink-muted)'; };
+  evtSource.onmessage = (e)=>{
+    try{ const d=JSON.parse(e.data);
+      if(d.event && d.event.startsWith('order.')){
+        toast(d.order_ref+' → '+d.state);
+        if(currentScreen==='orders') loadOrders();
+      }
+    }catch(err){}
+  };
+}
+
+// ---- screen routing ----
+let currentScreen='orders';
+const titles={orders:'Orders',money:'Money',ledger:'Refunds',system:'System',team:'Team',detail:'Order'};
+function show(name){
+  currentScreen=name;
+  ['orders','detail','money','ledger','system','team'].forEach(s=>{
+    $('s-'+s).classList.toggle('hidden', s!==name);
+  });
+  $('screen-title').textContent=titles[name]||name;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.screen===name));
+  refreshCurrent();
+}
+function refreshCurrent(){
+  if(currentScreen==='orders') loadOrders();
+  else if(currentScreen==='money') loadMoney();
+  else if(currentScreen==='ledger') loadLedger();
+  else if(currentScreen==='system') loadSystem();
+  else if(currentScreen==='team') loadTeam();
+}
+
+// ---- ORDERS ----
+function loadOrders(){
+  api('/api/admin/orders').then(r=>r.json()).then(rows=>{
+    const lanes={confirmed:[],detected:[],underpaid:[],pending:[],shipped:[],expired:[]};
+    rows.forEach(o=>{ (lanes[o.state]||(lanes[o.state]=[])).push(o); });
+    const order=['confirmed','detected','underpaid','pending','shipped','expired'];
+    const laneNames={confirmed:'Ready to ship',detected:'Payment detected',underpaid:'Underpaid',
+      pending:'Awaiting payment',shipped:'Shipped',expired:'Expired'};
+    let html='';
+    order.forEach(k=>{
+      const arr=lanes[k]; if(!arr||!arr.length) return;
+      html+='<div class="lane-title">'+laneNames[k]+' ('+arr.length+')</div><div class="card">';
+      arr.forEach(o=>{
+        let cart=[]; try{cart=JSON.parse(o.cart_json)}catch(e){}
+        const items=cart.map(i=>i.quantity+'× '+i.name).join(', ');
+        html+='<div class="order-line" onclick="openOrder(\''+o.order_ref+'\')">'+
+          '<div class="row"><strong class="mono">'+o.order_ref+'</strong>'+
+          '<span><span class="pill '+o.state+'">'+o.state+'</span>'+
+          (o.overpaid?'<span class="pill flag">over</span>':'')+
+          (o.underpaid_accepted?'<span class="pill flag">short</span>':'')+'</span></div>'+
+          '<div class="muted" style="font-size:13px;margin-top:3px">'+(items||'—')+'</div>'+
+          '<div class="muted mono" style="font-size:11px;margin-top:2px">'+(o.rail||'')+' · '+ago(o.created_at)+' ago</div>'+
+          '</div>';
+      });
+      html+='</div>';
+    });
+    $('s-orders').innerHTML = html || '<div class="card muted">No orders yet.</div>';
+  }).catch(()=>{});
+}
+
+// store last orders for detail lookup
+let _ordersCache=[];
+function openOrder(ref){
+  const handle = (rows)=>{
+    _ordersCache=rows; const o=rows.find(x=>x.order_ref===ref); if(!o) return;
+    let cart=[]; try{cart=JSON.parse(o.cart_json)}catch(e){}
+    const addr=[o.ship_name,o.ship_address1,o.ship_address2,o.ship_city,o.ship_region,o.ship_postal,o.ship_country].filter(Boolean).join('<br>');
+    const sm=o.shipping_method==='special_delivery'?'Special Delivery':(o.shipping_method==='tracked'?'Tracked':'—');
+    $('s-detail').innerHTML=
+      '<button class="back" onclick="show(\'orders\')">‹ Orders</button>'+
+      '<div class="card"><div class="row"><h2 class="mono">'+o.order_ref+'</h2>'+
+      '<span class="pill '+o.state+'">'+o.state+'</span></div>'+
+      '<table style="margin-top:10px">'+
+      '<tr><td class="muted">Items</td><td>'+cart.map(i=>i.quantity+'× '+i.name).join('<br>')+'</td></tr>'+
+      '<tr><td class="muted">Book value</td><td>'+fmtMoney(o.amount_usd||o.invoiced_usd, o.amount_gbp_snapshot)+'</td></tr>'+
+      '<tr><td class="muted">Rail</td><td>'+(o.rail||'—')+' '+(o.pay_currency||'')+'</td></tr>'+
+      (o.crypto_amount?'<tr><td class="muted">Received</td><td class="mono">'+o.crypto_amount+' '+(o.pay_currency||'')+'</td></tr>':'')+
+      (o.tx_hash?'<tr><td class="muted">Tx</td><td class="mono" style="word-break:break-all;font-size:11px">'+o.tx_hash+'</td></tr>':'')+
+      '<tr><td class="muted">Delivery</td><td>'+sm+'</td></tr>'+
+      (o.tracking_number?'<tr><td class="muted">Tracking</td><td class="mono">'+o.tracking_number+'</td></tr>':'')+
+      (o.shipped_by?'<tr><td class="muted">Shipped by</td><td>'+o.shipped_by+'</td></tr>':'')+
+      '<tr><td class="muted">Ship to</td><td>'+(addr||'—')+'</td></tr>'+
+      '<tr><td class="muted">Email</td><td>'+(o.customer_email||'—')+'</td></tr>'+
+      '<tr><td class="muted">Created</td><td>'+ago(o.created_at)+' ago</td></tr>'+
+      '</table></div>';
+    show('detail');
+  };
+  if(DEMO){ handle(SAMPLE.orders); return; }
+  api('/api/admin/orders').then(r=>r.json()).then(handle);
+}
+
+// ---- MONEY (sales + balances) ----
+function loadMoney(){
+  Promise.all([
+    api('/api/admin/sales').then(r=>r.json()).catch(()=>null),
+    api('/api/admin/balances').then(r=>r.json()).catch(()=>null),
+  ]).then(([sales,bal])=>{
+    let html='';
+    if(sales){
+      html+='<h2>Sales</h2><div class="grid3">'+
+        salesCard('Today',sales.today)+salesCard('7 days',sales.week)+salesCard('30 days',sales.month)+
+        '</div>';
+    }
+    html+='<h2 style="margin-top:18px">Balances</h2>';
+    if(bal && bal.wallets && bal.wallets.length){
+      html+='<div class="card"><div class="row"><strong>Total</strong><strong>'+
+        fmtMoney(bal.total_usd, bal.total_gbp_live)+'</strong></div></div>';
+      bal.wallets.forEach(w=>{
+        html+='<div class="card"><div class="row"><span>'+w.label+'</span>'+
+          '<span class="mono">'+w.balance+'</span></div>'+
+          '<div class="muted" style="font-size:12px">'+fmtMoney(w.usd,w.gbp_live)+'</div></div>';
+      });
+    } else {
+      html+='<div class="card muted">Balance sources are wired at deploy (view-only). '+
+        'Until then, view balances in the BTCPay and PayRam dashboards directly.</div>';
+    }
+    $('s-money').innerHTML=html;
+  });
+}
+function salesCard(label,d){
+  if(!d) return '';
+  return '<div class="card" style="margin:0"><div class="stat">$'+
+    Math.round(d.usd).toLocaleString()+'</div>'+
+    '<div class="stat-sub">£'+(d.gbp!=null?Math.round(d.gbp).toLocaleString():'—')+'</div>'+
+    '<div class="stat-sub">'+label+' · '+d.orders+' orders</div></div>';
+}
+
+// ---- LEDGER ----
+function loadLedger(){
+  api('/api/admin/ledger').then(r=>r.json()).then(rows=>{
+    if(!rows.length){ $('s-ledger').innerHTML='<div class="card muted">No refund/overpayment records. Rows appear automatically when an order is overpaid or shipped underpaid.</div>'; return; }
+    let html='<p class="muted" style="font-size:13px;margin-bottom:10px">Records only — nothing here sends funds. Refunds are sent manually from cold storage. No return addresses are stored by default.</p>';
+    rows.forEach(r=>{
+      html+='<div class="card"><div class="row"><strong class="mono">'+r.order_ref+'</strong>'+
+        '<span class="pill '+(r.status==='refunded'?'shipped':'underpaid')+'">'+r.status+'</span></div>'+
+        '<div style="font-size:13px;margin-top:6px">Type: '+r.delta_type+'</div>'+
+        (r.delta_crypto?'<div class="mono" style="font-size:12px">Delta: '+r.delta_crypto+'</div>':'')+
+        '<label>Refund address (paste only if refunding)</label>'+
+        '<input id="addr-'+r.id+'" value="'+(r.refund_address||'')+'" placeholder="(empty)">'+
+        '<label>Refund tx hash (after sending)</label>'+
+        '<input id="tx-'+r.id+'" value="'+(r.refund_tx_hash||'')+'" placeholder="(empty)">'+
+        '<div style="display:flex;gap:8px;margin-top:10px">'+
+        '<button class="btn sm" onclick="saveLedger('+r.id+')">Save</button>'+
+        '<button class="btn sm primary" onclick="markRefunded('+r.id+')">Mark refunded</button>'+
+        '</div></div>';
+    });
+    $('s-ledger').innerHTML=html;
+  });
+}
+function saveLedger(id){
+  api('/api/admin/ledger/'+id,{method:'POST',body:JSON.stringify({
+    refund_address:$('addr-'+id).value.trim()||null,
+    refund_tx_hash:$('tx-'+id).value.trim()||null
+  })}).then(()=>toast('Saved')).catch(()=>toast('Save failed'));
+}
+function markRefunded(id){
+  api('/api/admin/ledger/'+id,{method:'POST',body:JSON.stringify({
+    refund_address:$('addr-'+id).value.trim()||null,
+    refund_tx_hash:$('tx-'+id).value.trim()||null, status:'refunded'
+  })}).then(()=>{toast('Marked refunded');loadLedger()}).catch(()=>toast('Failed'));
+}
+
+// ---- SYSTEM (health + analytics + sessions) ----
+function loadSystem(){
+  api('/api/admin/health').then(r=>r.json()).then(h=>{
+    const free=h.disk_free_percent, used=h.disk_used_percent;
+    const gaugeColor = used>=h.disk_alert_at_used_percent?'var(--bad)':(used>=h.disk_alert_at_used_percent-10?'var(--warn)':'var(--ok)');
+    let html='<h2>System health</h2><div class="card">'+
+      '<div class="row"><span>Disk free</span><strong>'+(free!=null?free+'%':'—')+'</strong></div>'+
+      '<div class="gauge"><span style="width:'+(free!=null?free:0)+'%;background:'+gaugeColor+'"></span></div>'+
+      '<div class="muted" style="font-size:11px;margin-top:4px">Alert at '+h.disk_alert_at_used_percent+'% used</div>'+
+      '<div class="row" style="margin-top:10px"><span>Bitcoin node</span><strong>'+
+        (h.node&&h.node.unknown?'<span class="muted">unknown</span>':(h.node&&h.node.synced?'synced':'behind'))+'</strong></div>'+
+      '</div>';
+    html+='<div class="card"><div class="lane-title" style="margin-top:0">Services</div>';
+    const svc=h.services||{};
+    Object.keys(svc).forEach(k=>{
+      html+='<div class="row" style="padding:4px 0"><span>'+k+'</span>'+
+        '<span class="pill '+(svc[k]?'confirmed':'expired')+'">'+(svc[k]?'up':'down')+'</span></div>';
+    });
+    html+='</div>';
+    // sessions / employee time-on
+    html+='<h2 style="margin-top:18px">Employee activity</h2><div class="card" id="sessions">loading…</div>';
+    $('s-system').innerHTML=html;
+    loadSessions();
+  });
+}
+function loadSessions(){
+  api('/api/admin/sessions?days=14').then(r=>r.json()).then(rows=>{
+    if(!rows.length){ $('sessions').innerHTML='<span class="muted">No recent sessions.</span>'; return; }
+    let html='<table><tr><th>Who</th><th>On</th><th>For</th></tr>';
+    rows.slice(0,30).forEach(s=>{
+      const start=new Date(s.login_at.replace(' ','T')+'Z');
+      const end=s.logout_at?new Date(s.logout_at.replace(' ','T')+'Z'):(s.last_seen_at?new Date(s.last_seen_at.replace(' ','T')+'Z'):null);
+      let dur='open'; if(end){const m=Math.round((end-start)/60000); dur=m<60?m+'m':(Math.floor(m/60)+'h '+(m%60)+'m');}
+      html+='<tr><td>'+s.username+'</td><td class="mono" style="font-size:11px">'+
+        start.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+
+        '</td><td>'+dur+(s.ended_reason==='logout'?'':' ~')+'</td></tr>';
+    });
+    html+='</table><div class="muted" style="font-size:11px;margin-top:6px">~ = estimated (app closed without logout)</div>';
+    $('sessions').innerHTML=html;
+  });
+}
+
+// ---- TEAM (employee management) ----
+function loadTeam(){
+  api('/api/admin/employees').then(r=>r.json()).then(rows=>{
+    let html='<h2>Employees</h2>';
+    rows.forEach(u=>{
+      if(u.role==='admin') return; // don't manage the admin here
+      html+='<div class="card"><div class="row"><div><strong>'+u.username+'</strong>'+
+        '<div class="muted" style="font-size:12px">'+u.role+(u.last_login_at?' · last in '+ago(u.last_login_at)+' ago':'')+'</div></div>'+
+        '<button class="btn sm" onclick="toggleUser(\''+u.username+'\','+(u.active?0:1)+')">'+
+        (u.active?'Disable':'Enable')+'</button></div></div>';
+    });
+    html+='<h2 style="margin-top:18px">Add employee</h2><div class="card">'+
+      '<label>Username</label><input id="newU">'+
+      '<label>Temporary password</label><input id="newP">'+
+      '<button class="btn primary" style="margin-top:12px;width:100%" onclick="addUser()">Add fulfilment employee</button>'+
+      '<p class="muted" style="font-size:12px;margin-top:10px">This creates their login. You must also add their device in the VPN (Tailscale) console — that is the second access layer. To fully remove someone: Disable here AND remove their VPN node.</p></div>';
+    $('s-team').innerHTML=html;
+  });
+}
+function addUser(){
+  const username=$('newU').value.trim(), password=$('newP').value;
+  if(!username||!password){toast('Fill both fields');return}
+  api('/api/admin/employees',{method:'POST',body:JSON.stringify({username,password,role:'fulfilment'})})
+    .then(()=>{toast('Employee added');loadTeam()}).catch(()=>toast('Failed'));
+}
+function toggleUser(username,active){
+  api('/api/admin/employees/'+encodeURIComponent(username)+'/active',{method:'POST',body:JSON.stringify({active:!!active})})
+    .then(()=>{toast(active?'Enabled':'Disabled');loadTeam()}).catch(()=>toast('Failed'));
+}
+
+// ---- Web Push subscribe ----
+async function enablePush(){
+  try{
+    if(!('serviceWorker' in navigator)||!('PushManager' in window)){ toast('Push not supported'); return; }
+    const reg = await navigator.serviceWorker.ready;
+    const perm = await Notification.requestPermission();
+    if(perm!=='granted'){ toast('Notifications denied'); return; }
+    // VAPID public key is provided by the backend at deploy; placeholder fetch:
+    const keyRes = await api('/api/admin/push/vapid').then(r=>r.ok?r.json():null).catch(()=>null);
+    if(!keyRes||!keyRes.publicKey){ toast('Push key not configured yet'); return; }
+    const sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:urlB64(keyRes.publicKey)});
+    await api('/api/admin/push/subscribe',{method:'POST',body:JSON.stringify(sub)});
+    toast('Alerts enabled');
+    $('pushBtn').textContent='Alerts on';
+  }catch(e){ toast('Push setup failed'); }
+}
+function urlB64(s){const pad='='.repeat((4-s.length%4)%4);const b=(s+pad).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(b);return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));}
+
+// ---- register SW + start ----
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+if(DEMO){
+  // skip login entirely; show a demo banner
+  TOKEN='demo';
+  window.addEventListener('DOMContentLoaded', ()=>{
+    boot();
+    const b=document.createElement('div');
+    b.style.cssText='background:#b8702a;color:#fff;text-align:center;font-size:12px;padding:6px;position:sticky;top:0;z-index:60';
+    b.textContent='DEMO — sample data, not connected to any backend. For previewing the design only.';
+    document.body.insertBefore(b, document.body.firstChild);
+  });
+} else if(TOKEN){ boot(); } // resume session
+</script>
+</body>
+</html>
