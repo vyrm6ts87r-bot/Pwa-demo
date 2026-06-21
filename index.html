@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a1a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>STRAND Fulfilment</title>
+<style>
+  :root{
+    --bg:#f5f3ee; --surface:#fffdf8; --ink:#1a1a1a; --ink-muted:#6b6862;
+    --line:#e3ded4; --accent:#2f5d8a; --ok:#2f7d4f;
+    --mono:'SF Mono',ui-monospace,Menlo,monospace; --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#16150f; --surface:#1f1d16; --ink:#f0ece2; --ink-muted:#9a958a; --line:#332f25; --accent:#7aa7d4; }
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--sans);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:680px;margin:0 auto;padding:16px 14px 40px}
+  h1{font-size:22px}h2{font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted);margin:16px 0 8px}
+  .muted{color:var(--ink-muted)} .mono{font-family:var(--mono)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .btn{font:inherit;font-size:14px;padding:10px 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.sm{padding:7px 11px;font-size:13px}
+  .btn:disabled{opacity:.5}
+  input{font:inherit;font-size:15px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%}
+  label{font-size:13px;color:var(--ink-muted);display:block;margin:8px 0 4px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  .pill.ready{background:#d9efe0;color:#2f7d4f} .pill.shipped{background:#d3e4d3;color:#2f7d4f}
+  .ship-to{font-size:14px;line-height:1.5;margin-top:6px}
+  .items{font-size:14px;margin-top:6px}
+  .items strong{font-family:var(--mono)}
+  .hidden{display:none}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;z-index:50}
+  .toast.show{opacity:1}
+  .tag{font-size:12px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;color:var(--ink-muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- LOGIN -->
+  <div id="login">
+    <h1 style="margin-bottom:16px">STRAND Fulfilment</h1>
+    <div class="card">
+      <label for="u">Username</label>
+      <input id="u" autocomplete="username">
+      <label for="p">Password</label>
+      <input id="p" type="password" autocomplete="current-password">
+      <button class="btn primary" style="margin-top:14px;width:100%" onclick="login()">Sign in</button>
+      <p class="muted" style="font-size:12px;margin-top:10px">You must be connected to the VPN to reach this app.</p>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" class="hidden">
+    <div class="row" style="margin-bottom:4px"><h1>To ship</h1><button class="btn sm" onclick="load()">Refresh</button></div>
+    <p class="muted" style="font-size:12px;margin-bottom:12px">Pack each order, enter the tracking number from the Post Office receipt, and mark it shipped.</p>
+    <section id="ready"></section>
+    <h2>Recently shipped</h2>
+    <section id="shipped"></section>
+    <button class="btn sm" style="margin-top:16px" onclick="logout()">Sign out</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* STRAND Fulfilment — scoped employee app. ONE constant to set at deploy. */
+
+// ====== EDIT THIS ONE LINE AT DEPLOY ======
+const BACKEND = 'https://api.STRAND_DOMAIN';
+// ==========================================
+
+let TOKEN = sessionStorage.getItem('strand-fulfil-token') || null;
+function $(id){return document.getElementById(id)}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+// ====== DEMO MODE — mock data (not connected) ======
+const DEMO = true;
+function isoMin(m){return new Date(Date.now()-m*60000).toISOString().slice(0,19).replace('T',' ')}
+const SAMPLE_ORDERS = [
+  {order_ref:'STRAND-1043',state:'confirmed',shipping_method:'special_delivery',tracking_number:null,shipped_by:null,
+   ship_name:'J. Holloway',ship_org:'',ship_address1:'14 Pembroke Mews',ship_address2:'',ship_city:'London',ship_region:'',
+   ship_postal:'W8 6NX',ship_country:'United Kingdom',ship_phone:'07700 900812',
+   cart_json:'[{"name":"Research Pen — Compound A","quantity":2},{"name":"Bacteriostatic Water 30ml","quantity":1}]',
+   confirmed_at:isoMin(14),shipped_at:null},
+  {order_ref:'STRAND-1041',state:'confirmed',shipping_method:'special_delivery',tracking_number:null,shipped_by:null,
+   ship_name:'A. Lindqvist',ship_org:'',ship_address1:'22 Dawson Street',ship_address2:'',ship_city:'Dublin',ship_region:'',
+   ship_postal:'D02 X285',ship_country:'Ireland',ship_phone:'',
+   cart_json:'[{"name":"Research Pen — Compound A","quantity":1},{"name":"Research Vial — Compound C","quantity":2}]',
+   confirmed_at:isoMin(6),shipped_at:null},
+  {order_ref:'STRAND-1044',state:'confirmed',shipping_method:'tracked',tracking_number:null,shipped_by:null,
+   ship_name:'S. Mbeki',ship_org:'Kelvin Lab Services',ship_address1:'3 Innovation Way',ship_address2:'Unit 7',ship_city:'Glasgow',ship_region:'',
+   ship_postal:'G1 1XW',ship_country:'United Kingdom',ship_phone:'07700 900456',
+   cart_json:'[{"name":"Research Vial — Compound B","quantity":3}]',
+   confirmed_at:isoMin(2),shipped_at:null},
+  {order_ref:'STRAND-1038',state:'shipped',shipping_method:'special_delivery',tracking_number:'AB123456789GB',shipped_by:'employee_sam',
+   ship_name:'P. Nakamura',ship_org:'',ship_address1:'47 Sefton Park Road',ship_address2:'',ship_city:'Liverpool',ship_region:'',
+   ship_postal:'L8 3SD',ship_country:'United Kingdom',ship_phone:'07700 900998',
+   cart_json:'[{"name":"Research Vial — Compound C","quantity":2}]',
+   confirmed_at:isoMin(1430),shipped_at:isoMin(1200)},
+  {order_ref:'STRAND-1037',state:'shipped',shipping_method:'tracked',tracking_number:'AB987654321GB',shipped_by:'employee_jo',
+   ship_name:'L. Fontaine',ship_org:'',ship_address1:'12 Rue Test',ship_address2:'',ship_city:'Cardiff',ship_region:'',
+   ship_postal:'CF10 1AA',ship_country:'United Kingdom',ship_phone:'07700 900221',
+   cart_json:'[{"name":"Research Pen — Compound A","quantity":1},{"name":"Alcohol Prep Pads ×100","quantity":1}]',
+   confirmed_at:isoMin(2870),shipped_at:isoMin(2600)}
+];
+function api(path,opts){
+  if(path.indexOf('/ship/')>-1){ toast('Marked shipped (demo)'); 
+    const ref=decodeURIComponent(path.split('/ship/')[1]);
+    const o=SAMPLE_ORDERS.find(x=>x.order_ref===ref); if(o){o.state='shipped';o.shipped_at=isoMin(0);
+      try{o.tracking_number=JSON.parse(opts.body).tracking_number}catch(e){}o.shipped_by='you (demo)';}
+    return Promise.resolve({ok:true,json:()=>Promise.resolve({ok:true})});
+  }
+  return Promise.resolve({ok:true,json:()=>Promise.resolve(SAMPLE_ORDERS)});
+}
+// ====== END DEMO MOCK ======
+function ago(ts){if(!ts)return'';const d=new Date(ts.replace(' ','T')+'Z');const s=(Date.now()-d.getTime())/1000;
+  if(s<3600)return Math.floor(s/60)+'m';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d';}
+
+function login(){
+  const username=$('u').value.trim(),password=$('p').value;
+  fetch(BACKEND+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})})
+    .then(r=>r.ok?r.json():Promise.reject(new Error('bad')))
+    .then(d=>{TOKEN=d.token;sessionStorage.setItem('strand-fulfil-token',TOKEN);boot()})
+    .catch(()=>toast('Invalid credentials'));
+}
+function logout(){TOKEN=null;sessionStorage.removeItem('strand-fulfil-token');$('app').classList.add('hidden');$('login').classList.remove('hidden')}
+function boot(){$('login').classList.add('hidden');$('app').classList.remove('hidden');load();
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});}
+
+function load(){
+  api('/api/fulfil/orders').then(r=>r.json()).then(rows=>{
+    const ready=rows.filter(o=>o.state==='confirmed');
+    const shipped=rows.filter(o=>o.state==='shipped').slice(0,15);
+    $('ready').innerHTML = ready.length ? ready.map(readyCard).join('') :
+      '<div class="card muted">Nothing to ship right now.</div>';
+    $('shipped').innerHTML = shipped.length ? shipped.map(shippedCard).join('') :
+      '<div class="card muted">No recent shipments.</div>';
+  }).catch(()=>{});
+}
+function addr(o){return [o.ship_name,o.ship_org,o.ship_address1,o.ship_address2,o.ship_city,o.ship_region,o.ship_postal,o.ship_country].filter(Boolean).join('<br>')}
+function items(o){let c=[];try{c=JSON.parse(o.cart_json)}catch(e){}return c.map(i=>'<div><strong>'+i.quantity+'×</strong> '+i.name+'</div>').join('')}
+function method(o){return o.shipping_method==='special_delivery'?'Special Delivery':(o.shipping_method==='tracked'?'Tracked':'—')}
+
+function readyCard(o){
+  return '<div class="card"><div class="row"><strong class="mono">'+o.order_ref+'</strong>'+
+    '<span class="pill ready">ready</span></div>'+
+    '<div class="row" style="margin-top:6px"><span class="tag">'+method(o)+'</span>'+
+    '<span class="muted" style="font-size:12px">'+ago(o.confirmed_at)+' ago</span></div>'+
+    '<div class="items">'+items(o)+'</div>'+
+    '<div class="ship-to">'+addr(o)+'</div>'+
+    (o.ship_phone?'<div class="muted" style="font-size:13px;margin-top:4px">☎ '+o.ship_phone+'</div>':'')+
+    '<label>Tracking number (from Post Office receipt)</label>'+
+    '<input id="trk-'+o.order_ref+'" placeholder="Enter tracking number">'+
+    '<button class="btn primary" style="margin-top:10px;width:100%" onclick="ship(\''+o.order_ref+'\')">Mark shipped</button>'+
+    '</div>';
+}
+function shippedCard(o){
+  return '<div class="card"><div class="row"><strong class="mono">'+o.order_ref+'</strong>'+
+    '<span class="pill shipped">shipped</span></div>'+
+    '<div class="muted" style="font-size:13px;margin-top:4px">'+method(o)+
+    (o.tracking_number?' · '+o.tracking_number:'')+
+    (o.shipped_by?' · by '+o.shipped_by:'')+'</div></div>';
+}
+
+function ship(ref){
+  const trk=$('trk-'+ref).value.trim();
+  if(!trk){ if(!confirm('No tracking number entered. Mark shipped anyway?')) return; }
+  api('/api/fulfil/ship/'+encodeURIComponent(ref),{method:'POST',body:JSON.stringify({tracking_number:trk||null})})
+    .then(r=>r.ok?r.json():Promise.reject(new Error('fail')))
+    .then(()=>{toast(ref+' marked shipped');load()})
+    .catch(()=>toast('Could not mark shipped'));
+}
+
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+if(DEMO){
+  window.addEventListener('DOMContentLoaded',()=>{
+    TOKEN='demo'; boot();
+    const b=document.createElement('div');
+    b.style.cssText='background:#b8702a;color:#fff;text-align:center;font-size:12px;padding:6px;position:sticky;top:0;z-index:60';
+    b.textContent='DEMO — sample data, not connected to any backend. Preview only.';
+    document.body.insertBefore(b, document.body.firstChild);
+  });
+} else if(TOKEN){ boot(); }
+</script>
+</body>
+</html>
